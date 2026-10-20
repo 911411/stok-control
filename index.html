@@ -1,0 +1,675 @@
+<title>Caruzo Estoque</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* Layout: app de celular em coluna única, abas fixas embaixo, cartões de alerta com medidor de estoque. Cor da marca: bordô de adega. */
+:root{
+  --bg:#F6F3F4; --surface:#FFFFFF; --ink:#211A1D; --muted:#6B5F65; --line:#E4DDE0;
+  --accent:#7B1E3A; --accent-ink:#FFFFFF; --accent-soft:#F3E3E9;
+  --crit:#B3261E; --crit-bg:#FBE8E6; --warn:#8F5600; --warn-bg:#FFF0D2;
+  --info:#1D5B8A; --info-bg:#E2EFF9; --ok:#1E6B45; --ok-bg:#E1F2E8;
+  --font-display:'Bricolage Grotesque',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-body:'Figtree',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#161215; --surface:#211A1E; --ink:#F2EAEE; --muted:#AA9DA4; --line:#3A2F35;
+  --accent:#E58AA6; --accent-ink:#2B0A15; --accent-soft:#3A1F2A;
+  --crit:#FF9C92; --crit-bg:#3E1B18; --warn:#F2C46B; --warn-bg:#3A2C10;
+  --info:#8CC4EE; --info-bg:#162B3A; --ok:#7FD1A3; --ok-bg:#15301F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#161215; --surface:#211A1E; --ink:#F2EAEE; --muted:#AA9DA4; --line:#3A2F35;
+  --accent:#E58AA6; --accent-ink:#2B0A15; --accent-soft:#3A1F2A;
+  --crit:#FF9C92; --crit-bg:#3E1B18; --warn:#F2C46B; --warn-bg:#3A2C10;
+  --info:#8CC4EE; --info-bg:#162B3A; --ok:#7FD1A3; --ok-bg:#15301F; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 var(--font-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:0 96px;-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
+.wrap{max-width:680px;margin:0 auto}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font-size:1.35rem;font-weight:700}
+h3{font-size:1.05rem;font-weight:650}
+p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0 10px}
+.brand{display:flex;flex-direction:column;line-height:1.1}
+.brand b{font-family:var(--font-display);font-size:1.4rem;font-weight:800;color:var(--accent)}
+.brand span{font-size:.78rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.iconbtn{border:1px solid var(--line);background:var(--surface);border-radius:12px;min-height:44px;padding:0 14px;font-weight:600;display:flex;align-items:center;gap:6px}
+main{display:flex;flex-direction:column;gap:16px;padding-top:6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.muted{color:var(--muted)}
+.small{font-size:.875rem}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row>.grow{flex:1;min-width:0}
+.btn{min-height:48px;padding:0 18px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:600}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--crit);border-color:var(--crit)}
+.btn.sm{min-height:40px;padding:0 14px;font-size:.9rem}
+.btn.block{width:100%}
+a.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:inherit}
+a.btn.primary{color:var(--accent-ink)}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tile{border:1px solid var(--line);background:var(--surface);border-radius:16px;padding:12px;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tile b{font-family:var(--font-display);font-size:2rem;line-height:1;font-variant-numeric:tabular-nums}
+.tile span{font-size:.82rem;color:var(--muted)}
+.tile.crit{background:var(--crit-bg);border-color:transparent}.tile.crit b{color:var(--crit)}
+.tile.info{background:var(--info-bg);border-color:transparent}.tile.info b{color:var(--info)}
+.pill{display:inline-flex;align-items:center;border-radius:999px;padding:2px 10px;font-size:.78rem;font-weight:700;white-space:nowrap}
+.pill.out,.pill.low{background:var(--crit-bg);color:var(--crit)}
+.pill.slow{background:var(--info-bg);color:var(--info)}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.nodata,.pill.zero{background:var(--line);color:var(--muted)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.abc{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;font-weight:800;font-size:.8rem;background:var(--accent-soft);color:var(--accent)}
+.abc.B{background:var(--line);color:var(--ink)}.abc.C{background:transparent;border:1px solid var(--line);color:var(--muted)}
+.alert{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.a-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.a-head strong{min-width:0;overflow-wrap:anywhere}
+.a-head .tags{display:flex;gap:6px;align-items:center;flex-shrink:0}
+.meter{height:8px;border-radius:6px;background:var(--line);position:relative;overflow:hidden}
+.meter i{position:absolute;inset:0 auto 0 0;background:var(--crit);border-radius:6px}
+.meter.ok i{background:var(--ok)}
+.meter u{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);opacity:.7}
+.sug{background:var(--accent-soft);color:var(--accent);border-radius:10px;padding:8px 12px;font-weight:600;font-size:.92rem}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;min-height:40px;padding:0 14px;font-weight:600;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-weight:600;font-size:.9rem}
+.field small{color:var(--muted)}
+input[type=text],input[type=number],input[type=search],input[type=password],input[type=tel],select,textarea{width:100%;min-height:48px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:1rem}
+textarea{min-height:110px;font-family:ui-monospace,Menlo,monospace;font-size:.8rem}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.prod{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;min-height:60px}
+.prod .nm{flex:1;min-width:0;display:flex;flex-direction:column}
+.prod .nm b{overflow-wrap:anywhere;font-weight:600}
+.prod .qt{font-variant-numeric:tabular-nums;text-align:right;font-weight:700}
+.banner{border-radius:14px;padding:12px 14px;font-size:.92rem;display:flex;flex-direction:column;gap:8px}
+.banner.warn{background:var(--warn-bg);color:var(--warn)}
+.banner.info{background:var(--info-bg);color:var(--info)}
+.banner .btn{align-self:flex-start;background:transparent;color:inherit;border-color:currentColor}
+.steps{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none;counter-reset:s}
+.steps li{display:grid;grid-template-columns:32px 1fr;gap:10px;align-items:start;counter-increment:s}
+.steps li::before{content:counter(s);display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-weight:700}
+.abcbar{display:flex;height:14px;border-radius:8px;overflow:hidden;background:var(--line)}
+.abcbar i{display:block;height:100%}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.85rem}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;background:var(--c)}
+details{border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+summary{padding:14px;font-weight:650;cursor:pointer;min-height:48px;display:flex;align-items:center}
+details>div{padding:0 14px 14px;display:flex;flex-direction:column;gap:8px;font-size:.95rem}
+details ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+code{font-family:ui-monospace,Menlo,monospace;font-size:.85em;background:var(--bg);padding:1px 6px;border-radius:6px;overflow-wrap:anywhere}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:.82rem}
+th,td{padding:6px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;
+  padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+nav.tabs .in{display:flex;width:100%;max-width:680px;gap:4px}
+nav.tabs button{flex:1;min-width:0;border:0;background:transparent;border-radius:12px;min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:.74rem;font-weight:600;color:var(--muted);position:relative}
+nav.tabs button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav.tabs button[aria-current="page"]{color:var(--accent);background:var(--accent-soft)}
+nav.tabs .dot{position:absolute;top:4px;right:calc(50% - 20px);min-width:18px;height:18px;border-radius:9px;background:var(--crit);color:#fff;font-size:.7rem;display:grid;place-items:center;padding:0 5px}
+.overlay{position:fixed;inset:0;z-index:50;background:rgba(20,10,15,.55);display:flex;align-items:flex-end;justify-content:center;padding:0}
+.overlay.center{align-items:center;padding:16px}
+.sheet{background:var(--surface);width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;max-height:92%;overflow:auto}
+.overlay.center .sheet{border-radius:20px}
+.gate{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px max(16px,env(safe-area-inset-left,0px))}
+.gate .box{width:100%;max-width:400px;display:flex;flex-direction:column;gap:14px}
+.gate h1{font-size:1.8rem;color:var(--accent)}
+.pin{letter-spacing:.5em;text-align:center;font-size:1.5rem}
+.err{color:var(--crit);font-weight:600;font-size:.9rem;min-height:1.2em}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:12px;z-index:70;max-width:calc(100% - 32px);font-weight:600;font-size:.92rem;text-align:center}
+@media (prefers-reduced-motion:no-preference){.alert,.prod,.card{animation:in .25s ease both}@keyframes in{from{opacity:.0;transform:translateY(4px)}to{opacity:1;transform:none}}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><b>Caruzo Estoque</b><span>Alertas de reposição</span></div>
+    <button class="iconbtn" id="lockBtn" data-act="lock" hidden aria-label="Bloquear o aplicativo">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Bloquear</button>
+  </header>
+  <main id="view"></main>
+</div>
+<nav class="tabs" id="tabs" aria-label="Seções"><div class="in"></div></nav>
+<div id="layer"></div>
+<div id="toast" hidden role="status"></div>
+
+<script>
+(function(){
+'use strict';
+/* ---------- utilidades ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=(n,d=1)=>Number(n).toLocaleString('pt-BR',{maximumFractionDigits:d});
+const norm=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+const pad=n=>String(n).padStart(2,'0');
+const fmtD=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const today=()=>fmtD(new Date());
+const dayNum=s=>{const a=s.split('-').map(Number);return Math.floor(Date.UTC(a[0],a[1]-1,a[2])/864e5)};
+const brDate=s=>s?s.split('-').reverse().join('/'):'—';
+const addDays=(s,n)=>{const d=new Date(dayNum(s)*864e5+n*864e5);return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())};
+
+/* ---------- armazenamento local (nada sai do aparelho) ---------- */
+const K_ENC='caruzo.enc.v1',K_PLAIN='caruzo.plain.v1',K_SEEN='caruzo.seen.v1';
+const mem={};let storageOk=true;
+const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){storageOk=false;return mem[k]==null?null:mem[k]}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){storageOk=false;mem[k]=v}};
+const lsDel=k=>{try{localStorage.removeItem(k)}catch(e){delete mem[k]}};
+const cryptoOk=!!(window.crypto&&crypto.subtle);
+const enc=new TextEncoder(),dec=new TextDecoder();
+const toB64=buf=>{const a=new Uint8Array(buf);let s='';for(let i=0;i<a.length;i+=0x8000)s+=String.fromCharCode.apply(null,a.subarray(i,i+0x8000));return btoa(s)};
+const fromB64=b=>{const s=atob(b);const a=new Uint8Array(s.length);for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a};
+const deriveKey=async(pin,salt)=>{const km=await crypto.subtle.importKey('raw',enc.encode(pin),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])};
+
+const defaults=()=>({v:1,products:{},sales:[],snooze:{},lastNotified:{},demo:false,stockAt:null,salesAt:null,
+  settings:{lead:3,safety:2,window:30,slow:30,cover:15,wa:'',notify:false}});
+let S=defaults(),key=null,saltB64=null,locked=false;
+const merge=o=>{const d=defaults();return Object.assign(d,o,{settings:Object.assign(d.settings,(o&&o.settings)||{})})};
+let q=Promise.resolve();
+const save=()=>{q=q.then(async()=>{try{
+  const payload=JSON.stringify(S);
+  if(key){const iv=crypto.getRandomValues(new Uint8Array(12));
+    const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,enc.encode(payload));
+    lsSet(K_ENC,JSON.stringify({s:saltB64,i:toB64(iv),c:toB64(ct)}));lsDel(K_PLAIN);
+  }else{lsSet(K_PLAIN,payload)}
+}catch(e){}})};
+
+/* ---------- cálculo dos alertas ---------- */
+function analyze(){
+  const st=S.settings,t=dayNum(today()),td=today();
+  const P=Object.values(S.products),byCode={};
+  P.forEach(p=>{if(p.code)byCode[String(p.code)]=p.id});
+  const agg={};let minD=Infinity;
+  S.sales.forEach(s=>{
+    const id=(s.c&&byCode[s.c])||(S.products[s.n]?s.n:null);if(!id)return;
+    const dn=dayNum(s.d),age=t-dn;if(age<0||age>90)return;
+    const p=S.products[id],a=agg[id]||(agg[id]={w:0,sl:0,rev:0,last:-1e9});
+    if(dn<minD)minD=dn;
+    if(age<st.window)a.w+=s.q;if(age<st.slow)a.sl+=s.q;
+    a.rev+=s.v>0?s.v:s.q*(p.price||p.cost||1);if(dn>a.last)a.last=dn;
+  });
+  const span=Math.min(st.window,Math.max(7,isFinite(minD)?t-minD+1:st.window));
+  const hasSales=S.sales.length>0;
+  const out=P.map(p=>{
+    const a=agg[p.id]||{w:0,sl:0,rev:0,last:-1e9};
+    const daily=a.w/span,lead=p.lead!=null?p.lead:st.lead;
+    const auto=daily>0?Math.ceil(daily*(lead+st.safety)):0;
+    const min=p.min!=null?p.min:auto;
+    const cover=daily>0&&p.stock!=null?p.stock/daily:null;
+    let status='ok';
+    if(p.stock==null)status='nodata';
+    else if(p.stock<=0&&(daily>0||min>0))status='out';
+    else if(p.stock<=0)status='zero';
+    else if(min>0&&p.stock<=min)status='low';
+    else if(hasSales&&a.sl===0)status='slow';
+    const snoozed=(S.snooze[p.id]||'')>td;
+    let sug=null;
+    if(status==='out'||status==='low'){sug=daily>0?Math.max(1,Math.ceil(daily*st.cover-p.stock)):Math.max(1,Math.ceil(min*2-p.stock))}
+    return {p,id:p.id,a,daily,lead,auto,min,cover,status,snoozed,sug,rev:a.rev,
+      idle:a.last>-1e8?t-a.last:null,active:(status==='out'||status==='low'||status==='slow')&&!snoozed,cls:'C'};
+  });
+  const sorted=out.filter(x=>x.rev>0).sort((a,b)=>b.rev-a.rev),total=sorted.reduce((s,x)=>s+x.rev,0);let cum=0;
+  sorted.forEach(x=>{cum+=x.rev;x.cls=(cum-x.rev)/total<0.8?'A':(cum-x.rev)/total<0.95?'B':'C'});
+  const rank={out:0,low:1,slow:2,ok:3,zero:4,nodata:5},cr={A:0,B:1,C:2};
+  out.sort((a,b)=>rank[a.status]-rank[b.status]||cr[a.cls]-cr[b.cls]||(a.cover==null?1e9:a.cover)-(b.cover==null?1e9:b.cover)||a.p.name.localeCompare(b.p.name));
+  return {list:out,total,span};
+}
+
+/* ---------- estado de tela ---------- */
+let tab='painel',alertFilter='repor',prodFilter='todos',prodSearch='',imp=null,lockTimer=null;
+const icons={
+  painel:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
+  alertas:'<svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>',
+  produtos:'<svg viewBox="0 0 24 24"><path d="M8 3h8l-1 6a3 3 0 0 1-6 0z"/><path d="M12 12v8M8 20h8"/></svg>',
+  importar:'<svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>',
+  mais:'<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>'};
+const tabNames={painel:'Painel',alertas:'Alertas',produtos:'Produtos',importar:'Importar',mais:'Mais'};
+
+function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,3600)}
+const statusLabel={out:'Acabou',low:'Repor',slow:'Baixa saída',ok:'Em dia',zero:'Zerado',nodata:'Sem saldo'};
+const un=n=>fmt(n,1)+(Math.abs(n)===1?' un.':' un.');
+const coverTxt=c=>c==null?'':c<1?'dura menos de 1 dia':'dura cerca de '+fmt(c,c<10?1:0)+' dias';
+
+/* ---------- peças de tela ---------- */
+function alertCard(x){
+  const sl=x.status==='slow',lvl=x.min>0?Math.min(100,Math.max(0,x.p.stock/(x.min*2)*100)):0;
+  const meta=sl
+    ?(x.idle!=null?`Sem vendas há ${x.idle} dias`:`Sem vendas nos últimos 90 dias`)+` · estoque ${un(x.p.stock)}`
+    :`Estoque ${un(Math.max(0,x.p.stock))} · mínimo ${un(x.min)}${x.cover!=null?' · '+coverTxt(x.cover):''}`;
+  return `<article class="alert">
+    <div class="a-head"><strong>${esc(x.p.name)}</strong><div class="tags"><span class="abc ${x.cls}" title="Classe ${x.cls} na curva ABC">${x.cls}</span><span class="pill ${x.status}">${statusLabel[x.status]}</span></div></div>
+    ${sl?'':`<div class="meter" aria-hidden="true"><i style="width:${lvl.toFixed(0)}%"></i><u style="left:50%"></u></div>`}
+    <div class="small muted">${esc(meta)}</div>
+    ${x.sug?`<div class="sug">Sugestão de pedido: cerca de ${fmt(x.sug,0)} un. (para durar ${S.settings.cover} dias)</div>`:''}
+    ${sl?`<div class="small muted">Antes de comprar de novo, avalie a necessidade. Se houver capital parado, pense em uma promoção.</div>`:''}
+    <div class="row">
+      ${sl?`<button class="btn sm" data-act="snooze" data-id="${esc(x.id)}" data-days="30">Entendi, avisar daqui a 30 dias</button>`
+          :`<button class="btn sm primary" data-act="snooze" data-id="${esc(x.id)}" data-days="${Math.max(2,x.lead+1)}">Já pedi</button>`}
+      <button class="btn sm" data-act="edit" data-id="${esc(x.id)}">Ajustar produto</button>
+    </div></article>`;
+}
+function prodRow(x){
+  return `<button class="prod" data-act="edit" data-id="${esc(x.id)}">
+    <span class="abc ${x.cls}">${x.cls}</span>
+    <span class="nm"><b>${esc(x.p.name)}</b><span class="small muted">${x.p.code?esc(x.p.code)+' · ':''}mín. ${fmt(x.min,0)}${x.p.min!=null?' (manual)':''}${x.daily>0?' · sai '+fmt(x.daily,1)+'/dia':''}</span></span>
+    <span class="qt">${x.p.stock==null?'—':fmt(x.p.stock,1)}<br><span class="pill ${x.status}">${statusLabel[x.status]}</span></span></button>`;
+}
+
+function summaryText(A){
+  const rep=A.list.filter(x=>x.active&&(x.status==='out'||x.status==='low')),sl=A.list.filter(x=>x.active&&x.status==='slow');
+  const d=new Date(),l=[`*Caruzo Estoque* — ${pad(d.getDate())}/${pad(d.getMonth()+1)}`,''];
+  if(!rep.length&&!sl.length)return l.concat(['Nenhum alerta no momento.']).join('\n');
+  if(rep.length){l.push(`*REPOR (${rep.length})*`);rep.slice(0,15).forEach(x=>l.push(`• ${x.p.name}: ${fmt(Math.max(0,x.p.stock),0)} un. (mín. ${fmt(x.min,0)})${x.sug?' → pedir ~'+fmt(x.sug,0):''}`));if(rep.length>15)l.push(`… e mais ${rep.length-15}`);l.push('')}
+  if(sl.length){l.push(`*BAIXA SAÍDA (${sl.length})*`);sl.slice(0,10).forEach(x=>l.push(`• ${x.p.name}: ${fmt(x.p.stock,0)} un. parados`));if(sl.length>10)l.push(`… e mais ${sl.length-10}`)}
+  return l.join('\n');
+}
+
+/* ---------- telas ---------- */
+function vPainel(A){
+  const rep=A.list.filter(x=>x.active&&(x.status==='out'||x.status==='low')),sl=A.list.filter(x=>x.active&&x.status==='slow');
+  let h=banners();
+  if(!A.list.length){
+    return h+`<section class="card"><h2>Bem-vindo, Luana e Zé</h2>
+      <p class="muted">Este aplicativo avisa quando um produto está acabando e quando algum item não sai da prateleira. Ele usa os relatórios que o SIAV já gera, sem mexer no sistema.</p>
+      <ol class="steps"><li><span><b>Exporte do SIAV</b> o relatório de estoque e o de vendas por produto (Excel ou CSV).</span></li>
+      <li><span><b>Importe aqui</b>, na aba Importar. Leva menos de um minuto.</span></li>
+      <li><span><b>Veja os alertas</b> e envie o resumo para o WhatsApp de quem faz as compras.</span></li></ol>
+      <button class="btn primary block" data-act="demo">Ver com dados de exemplo</button>
+      <button class="btn block" data-act="tab" data-tab="importar">Importar meus dados</button></section>`;
+  }
+  h+=`<div class="tiles">
+    <button class="tile crit" data-act="goalerts" data-f="repor"><b>${rep.length}</b><span>Repor agora</span></button>
+    <button class="tile info" data-act="goalerts" data-f="baixa"><b>${sl.length}</b><span>Baixa saída</span></button>
+    <button class="tile" data-act="tab" data-tab="produtos"><b>${A.list.length}</b><span>Produtos</span></button></div>`;
+  const top=A.list.filter(x=>x.active&&(x.status==='out'||x.status==='low')).slice(0,4);
+  h+=`<section style="display:flex;flex-direction:column;gap:10px"><h2>Mais urgentes</h2>${top.length?top.map(alertCard).join(''):'<div class="card"><b>Tudo em dia.</b><span class="muted small">Nenhum produto abaixo do mínimo agora.</span></div>'}
+    ${rep.length>4?`<button class="btn block" data-act="goalerts" data-f="repor">Ver todos os ${rep.length} alertas de reposição</button>`:''}</section>`;
+  const waNum=(S.settings.wa||'').replace(/\D/g,''),txt=summaryText(A);
+  h+=`<section class="card"><h3>Avisar a equipe</h3><p class="small muted">O resumo vai pronto para o WhatsApp. Quem recebe não precisa abrir o aplicativo.</p>
+    <a class="btn primary block" target="_blank" rel="noopener" href="https://wa.me/${waNum}?text=${encodeURIComponent(txt)}">Enviar resumo no WhatsApp</a>
+    <button class="btn block" data-act="copysum">Copiar resumo</button>
+    ${notifBlock()}</section>`;
+  const cnt={A:0,B:0,C:0},tot=A.total||1,rv={A:0,B:0,C:0};
+  A.list.forEach(x=>{cnt[x.cls]++;rv[x.cls]+=x.rev});
+  if(A.total>0)h+=`<section class="card"><h3>Curva ABC</h3><p class="small muted">Os produtos A trazem a maior parte do faturamento (últimos 90 dias). Eles merecem a atenção primeiro.</p>
+    <div class="abcbar" role="img" aria-label="Participação no faturamento: A ${fmt(rv.A/tot*100,0)}%, B ${fmt(rv.B/tot*100,0)}%, C ${fmt(rv.C/tot*100,0)}%">
+      <i style="width:${rv.A/tot*100}%;background:var(--accent)"></i><i style="width:${rv.B/tot*100}%;background:var(--muted)"></i><i style="width:${rv.C/tot*100}%;background:var(--line)"></i></div>
+    <div class="legend"><span style="--c:var(--accent)">A: ${cnt.A} itens · ${fmt(rv.A/tot*100,0)}%</span><span style="--c:var(--muted)">B: ${cnt.B} · ${fmt(rv.B/tot*100,0)}%</span><span style="--c:var(--line)">C: ${cnt.C} · ${fmt(rv.C/tot*100,0)}%</span></div></section>`;
+  return h;
+}
+function banners(){
+  let h='';
+  if(!storageOk)h+=`<div class="banner warn"><b>Os dados não estão sendo guardados neste navegador.</b><span>Ao fechar esta página, eles se perdem. Abra o link em um navegador comum (Chrome ou Safari, fora do modo privado).</span></div>`;
+  if(S.demo)h+=`<div class="banner info"><b>Você está vendo dados de exemplo.</b><span>Os produtos e as quantidades são inventados. Ao importar seus relatórios, o exemplo é apagado.</span><button class="btn sm" data-act="cleardemo">Apagar exemplo</button></div>`;
+  else{
+    const t=today(),age=S.stockAt?dayNum(t)-dayNum(S.stockAt):null;
+    if(Object.keys(S.products).length&&age!=null&&age>=2)h+=`<div class="banner warn"><b>O estoque foi importado há ${age} dias.</b><span>Os alertas podem estar desatualizados. Importe o relatório de hoje.</span><button class="btn sm" data-act="tab" data-tab="importar">Importar agora</button></div>`;
+    if(Object.keys(S.products).length&&!S.sales.length)h+=`<div class="banner info"><b>Falta importar as vendas.</b><span>Sem elas não é possível calcular o estoque mínimo automático nem a baixa saída.</span><button class="btn sm" data-act="tab" data-tab="importar">Importar vendas</button></div>`;
+  }
+  return h;
+}
+function notifBlock(){
+  const supported='Notification' in window;
+  if(!supported)return `<p class="small muted">Este navegador não permite avisos na tela. Use o resumo no WhatsApp.</p>`;
+  const perm=Notification.permission;
+  if(S.settings.notify&&perm==='granted')return `<p class="small muted">Avisos na tela ativados. Eles aparecem enquanto o aplicativo estiver aberto no aparelho.</p><button class="btn sm" data-act="notifoff">Desativar avisos na tela</button>`;
+  if(perm==='denied')return `<p class="small muted">Os avisos estão bloqueados nas configurações do navegador. O resumo no WhatsApp continua funcionando.</p>`;
+  return `<button class="btn block" data-act="notifon">Ativar avisos na tela deste aparelho</button><p class="small muted">Eles aparecem enquanto o aplicativo estiver aberto.</p>`;
+}
+function vAlertas(A){
+  const rep=A.list.filter(x=>x.active&&(x.status==='out'||x.status==='low')),sl=A.list.filter(x=>x.active&&x.status==='slow'),sn=A.list.filter(x=>x.snoozed&&(x.status==='out'||x.status==='low'||x.status==='slow'));
+  const L=alertFilter==='repor'?rep:alertFilter==='baixa'?sl:sn;
+  const empty={repor:'Nenhum produto abaixo do mínimo.',baixa:'Nenhum produto parado.',adiados:'Nenhum alerta adiado.'}[alertFilter];
+  return banners()+`<h2>Alertas</h2><div class="chips" role="group" aria-label="Tipo de alerta">
+    <button class="chip" aria-pressed="${alertFilter==='repor'}" data-act="af" data-f="repor">Repor (${rep.length})</button>
+    <button class="chip" aria-pressed="${alertFilter==='baixa'}" data-act="af" data-f="baixa">Baixa saída (${sl.length})</button>
+    <button class="chip" aria-pressed="${alertFilter==='adiados'}" data-act="af" data-f="adiados">Adiados (${sn.length})</button></div>
+    ${L.length?L.map(alertCard).join(''):`<div class="card"><b>${empty}</b>${A.list.length?'':'<span class="muted small">Importe seus relatórios na aba Importar.</span>'}</div>`}`;
+}
+function vProdutos(A){
+  const s=norm(prodSearch);
+  let L=A.list.filter(x=>!s||norm(x.p.name).includes(s)||String(x.p.code||'').toLowerCase().includes(s));
+  if(['A','B','C'].includes(prodFilter))L=L.filter(x=>x.cls===prodFilter);
+  if(prodFilter==='alerta')L=L.filter(x=>x.active);
+  const shown=L.slice(0,150);
+  return `<div class="row"><h2 class="grow">Produtos</h2><button class="btn sm primary" data-act="edit" data-id="">+ Novo</button></div>
+    <input type="search" id="psearch" placeholder="Buscar por nome ou código" value="${esc(prodSearch)}" aria-label="Buscar produto" autocomplete="off">
+    <div class="chips">${[['todos','Todos'],['alerta','Com alerta'],['A','Classe A'],['B','Classe B'],['C','Classe C']].map(c=>`<button class="chip" aria-pressed="${prodFilter===c[0]}" data-act="pf" data-f="${c[0]}">${c[1]}</button>`).join('')}</div>
+    ${shown.length?`<div style="display:flex;flex-direction:column;gap:8px">${shown.map(prodRow).join('')}</div>`:`<div class="card"><b>Nenhum produto encontrado.</b></div>`}
+    ${L.length>150?`<p class="small muted">Mostrando 150 de ${L.length}. Use a busca para achar um item.</p>`:''}`;
+}
+
+/* ---------- importação ---------- */
+const FIELDS={
+  stock:[['name','Produto',1,['descricao','produto','mercadoria','item','nome']],['code','Código (opcional)',0,['codigo','cod','sku','barras','ean','ref']],['stock','Quantidade em estoque',1,['estoque','saldo','qtd atual','quantidade','qtde','qtd']],['cost','Preço de custo (opcional)',0,['custo']],['price','Preço de venda (opcional)',0,['preco venda','venda','preco','valor unit']]],
+  sales:[['date','Data da venda',1,['data','emissao','dt','dia']],['name','Produto',1,['descricao','produto','mercadoria','item','nome']],['code','Código (opcional)',0,['codigo','cod','sku','barras','ean','ref']],['qty','Quantidade vendida',1,['quantidade','qtde','qtd']],['value','Valor total (opcional)',0,['valor total','total','valor','vlr']]]};
+function guessMap(kind,headers){
+  const H=headers.map(norm),used=new Set(),map={};
+  FIELDS[kind].forEach(f=>{
+    let idx=-1;
+    for(const pat of f[3]){idx=H.findIndex((h,i)=>!used.has(i)&&h.includes(pat));if(idx>=0)break}
+    if(idx>=0)used.add(idx);map[f[0]]=idx;
+  });
+  return map;
+}
+function parseCSV(t){
+  const first=t.split(/\r?\n/).find(l=>l.trim())||'';
+  const cnt=d=>first.split(d).length,delim=[';','\t',','].sort((a,b)=>cnt(b)-cnt(a))[0];
+  const rows=[];let row=[],f='',inq=false;
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(inq){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else inq=false}else f+=c}
+    else if(c==='"')inq=true;
+    else if(c===delim){row.push(f);f=''}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;row.push(f);f='';if(row.some(x=>x.trim()))rows.push(row);row=[]}
+    else f+=c}
+  row.push(f);if(row.some(x=>x.trim()))rows.push(row);return rows;
+}
+function readFile(file,kind){
+  const ext=(file.name.split('.').pop()||'').toLowerCase(),fr=new FileReader();
+  fr.onerror=()=>toast('Não consegui ler este arquivo.');
+  if(ext==='xlsx'||ext==='xls'){
+    fr.onload=()=>{try{if(!window.XLSX)throw new Error('sem biblioteca');
+      const wb=XLSX.read(fr.result,{type:'array',cellDates:true}),ws=wb.Sheets[wb.SheetNames[0]];
+      startImport(kind,file.name,XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''}))}
+      catch(e){toast('Não consegui abrir a planilha. Salve como CSV e tente de novo.')}};
+    fr.readAsArrayBuffer(file);
+  }else{
+    fr.onload=()=>{let txt=new TextDecoder('utf-8').decode(fr.result);if(txt.includes(String.fromCharCode(65533)))txt=new TextDecoder('windows-1252').decode(fr.result);
+      startImport(kind,file.name,parseCSV(txt))};
+    fr.readAsArrayBuffer(file);
+  }
+}
+function startImport(kind,name,rows){
+  const hi=rows.findIndex(r=>r.filter(c=>String(c).trim()!=='').length>=2);
+  if(hi<0){toast('O arquivo está vazio ou sem colunas.');return}
+  const headers=rows[hi].map(c=>String(c).trim()),data=rows.slice(hi+1).filter(r=>r.some(c=>String(c).trim()!==''));
+  imp={kind,name,headers,rows:data,map:guessMap(kind,headers)};render();
+  setTimeout(()=>{const e=$('#impbox');if(e)e.scrollIntoView({behavior:'smooth',block:'start'})},50);
+}
+function toNum(v){
+  if(typeof v==='number')return isFinite(v)?v:NaN;
+  let s=String(v==null?'':v).replace(/R\$|\s/g,'');if(!s)return NaN;
+  if(s.includes(',')&&s.includes('.')){s=s.lastIndexOf(',')>s.lastIndexOf('.')?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'')}
+  else if(s.includes(','))s=s.replace(',','.');
+  const n=parseFloat(s);return isFinite(n)?n:NaN;
+}
+function toDate(v){
+  if(v instanceof Date&&!isNaN(v))return fmtD(new Date(v.getTime()+432e5-(v.getTimezoneOffset()*0)));
+  if(typeof v==='number'&&v>20000&&v<80000){const d=new Date(Math.round((v-25569)*864e5));return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())}
+  const s=String(v||'').trim();let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m)return m[1]+'-'+pad(+m[2])+'-'+pad(+m[3]);
+  m=s.match(/(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/);
+  if(m){let y=+m[3];if(y<100)y+=2000;return y+'-'+pad(+m[2])+'-'+pad(+m[1])}
+  return null;
+}
+function wipeDemo(){if(S.demo){S.products={};S.sales=[];S.snooze={};S.lastNotified={};S.demo=false;S.stockAt=null;S.salesAt=null}}
+function applyImport(){
+  const {kind,map,rows}=imp,get=(r,k)=>map[k]>=0?r[map[k]]:'';let n=0,bad=0;
+  wipeDemo();
+  if(kind==='stock'){
+    rows.forEach(r=>{
+      const name=String(get(r,'name')).trim();if(!name){return}
+      const st=toNum(get(r,'stock'));if(isNaN(st)){bad++;return}
+      const id=norm(name),p=S.products[id]||{id,name,code:'',stock:null,min:null,lead:null,cost:0,price:0};
+      p.name=name;p.stock=st;
+      const c=String(get(r,'code')).trim();if(c)p.code=c;
+      const co=toNum(get(r,'cost')),pr=toNum(get(r,'price'));if(!isNaN(co))p.cost=co;if(!isNaN(pr))p.price=pr;
+      S.products[id]=p;n++;
+    });
+    S.stockAt=today();
+  }else{
+    const t=dayNum(today()),out=[];
+    rows.forEach(r=>{
+      const name=String(get(r,'name')).trim(),d=toDate(get(r,'date')),q=toNum(get(r,'qty'));
+      if(!name||!d||isNaN(q)||q<=0){bad++;return}
+      if(t-dayNum(d)>90||dayNum(d)>t)return;
+      const v=toNum(get(r,'value'));
+      out.push({d,n:norm(name),c:String(get(r,'code')).trim(),q,v:isNaN(v)?0:v});n++;
+    });
+    S.sales=out;S.salesAt=today();
+  }
+  imp=null;save();
+  toast(`${n} ${kind==='stock'?'produtos atualizados':'vendas importadas'}${bad?` · ${bad} linhas ignoradas`:''}`);
+  tab=kind==='stock'&&!S.sales.length?'importar':'painel';render();maybeNotify();
+}
+function vImportar(){
+  let h=banners()+`<h2>Importar dados do SIAV</h2>
+   <p class="muted small">Os arquivos são lidos neste aparelho e não são enviados para a internet. Importe de novo sempre que quiser atualizar os alertas.</p>`;
+  const card=(kind,title,desc,when)=>`<section class="card"><h3>${title}</h3><p class="small muted">${desc}</p>
+    <div class="small">${when?`Última importação: <b>${brDate(when)}</b>`:'Ainda não importado'}</div>
+    <label class="btn primary block" style="display:flex;align-items:center;justify-content:center;cursor:pointer" for="file-${kind}">Escolher arquivo (Excel ou CSV)</label>
+    <input type="file" id="file-${kind}" data-kind="${kind}" accept=".csv,.xlsx,.xls,.txt" style="position:absolute;left:-9999px;width:1px;height:1px" aria-label="${title}"></section>`;
+  h+=card('stock','1. Posição de estoque','Relatório com uma linha por produto: nome, quantidade em estoque e, se houver, código e preços.',S.stockAt);
+  h+=card('sales','2. Vendas por produto (últimos 90 dias)','Relatório com uma linha por venda ou por dia: data, produto e quantidade. As vendas antigas são substituídas por este arquivo.',S.salesAt);
+  if(imp){
+    const sel=(f)=>`<div class="field"><label for="m-${f[0]}">${f[1]}${f[2]?' *':''}</label><select id="m-${f[0]}" data-map="${f[0]}"><option value="-1">(não usar)</option>${imp.headers.map((hd,i)=>`<option value="${i}"${imp.map[f[0]]===i?' selected':''}>${esc(hd||'Coluna '+(i+1))}</option>`).join('')}</select></div>`;
+    const miss=FIELDS[imp.kind].filter(f=>f[2]&&imp.map[f[0]]<0);
+    h+=`<section class="card" id="impbox"><h3>Conferir colunas</h3><p class="small muted">Arquivo: <b>${esc(imp.name)}</b> · ${imp.rows.length} linhas. Confira se cada campo aponta para a coluna certa.</p>
+      <div class="grid2">${FIELDS[imp.kind].map(sel).join('')}</div>
+      <div class="tablewrap"><table><thead><tr>${imp.headers.map(x=>`<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${imp.rows.slice(0,3).map(r=>`<tr>${imp.headers.map((_,i)=>`<td>${esc(r[i] instanceof Date?fmtD(r[i]):r[i])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      ${miss.length?`<p class="err">Escolha a coluna de: ${miss.map(m=>m[1]).join(', ')}.</p>`:''}
+      <div class="row"><button class="btn primary grow" data-act="doimport" ${miss.length?'disabled':''}>Importar</button><button class="btn" data-act="cancelimport">Cancelar</button></div></section>`;
+  }
+  h+=`<details><summary>Como exportar do SIAV</summary><div><p>No SIAV, abra o relatório de posição de estoque e o de vendas por produto e use a opção de exportar para Excel ou CSV. O nome exato do menu muda conforme a versão do sistema. Se não encontrar, peça ao suporte do SIAV o relatório com estas colunas:</p>
+    <ul><li><b>Estoque:</b> código, produto, quantidade em estoque, custo, preço de venda.</li><li><b>Vendas:</b> data, código, produto, quantidade, valor total.</li></ul>
+    <p>Os nomes das colunas podem ser diferentes. O aplicativo tenta reconhecer e deixa você conferir antes de importar.</p></div></details>`;
+  return h;
+}
+
+/* ---------- mais: ajustes, segurança, ajuda ---------- */
+function vMais(){
+  const st=S.settings,pinOn=!!key;
+  const num=(id,l,v,hint)=>`<div class="field"><label for="${id}">${l}</label><input type="number" inputmode="decimal" min="0" id="${id}" data-set="${id}" value="${v}">${hint?`<small>${hint}</small>`:''}</div>`;
+  return banners()+`<h2>Ajustes</h2>
+  <section class="card"><h3>Regras dos alertas</h3>
+    <div class="grid2">${num('lead','Prazo de entrega (dias)',st.lead,'Do pedido até chegar na loja')}${num('safety','Folga de segurança (dias)',st.safety,'Estoque extra para imprevistos')}
+    ${num('window','Média de vendas dos últimos (dias)',st.window,'Base do cálculo de consumo')}${num('slow','Baixa saída após (dias sem vender)',st.slow,'Produto parado entra no alerta')}
+    ${num('cover','Pedido sugerido cobre (dias)',st.cover,'Quantidade sugerida na compra')}</div>
+    <p class="small muted">Estoque mínimo automático = vendas por dia × (prazo + folga). Você pode fixar um mínimo manual em cada produto.</p></section>
+  <section class="card"><h3>WhatsApp</h3><div class="field"><label for="wa">Número que recebe o resumo (opcional)</label><input type="tel" inputmode="tel" id="wa" data-set="wa" placeholder="5511999999999" value="${esc(st.wa)}"><small>Com código do país e DDD, só números. Em branco, você escolhe o contato na hora de enviar.</small></div></section>
+  <section class="card"><h3>Segurança dos dados</h3>
+    <p class="small muted">Tudo fica guardado somente neste aparelho. Nada é enviado para servidores.${pinOn?' Os dados estão protegidos por PIN e criptografados.':' Sem PIN, qualquer pessoa que abrir este navegador vê os dados.'}</p>
+    ${cryptoOk?(pinOn?`<div class="row"><button class="btn" data-act="setpin">Trocar PIN</button><button class="btn" data-act="rmpin">Remover PIN</button></div>`:`<button class="btn primary" data-act="setpin">Criar PIN de 6 números</button>`):'<p class="small muted">Este navegador não suporta proteção por PIN.</p>'}</section>
+  <section class="card"><h3>Avisos</h3>${notifBlock()}</section>
+  <section class="card"><h3>Cópia de segurança</h3><p class="small muted">Para levar os dados a outro aparelho, copie o texto abaixo e cole em Restaurar no outro aparelho. O texto contém seus produtos e vendas, então guarde com cuidado.</p>
+    <button class="btn" data-act="backup">Copiar cópia de segurança</button><textarea id="bk" hidden readonly aria-label="Cópia de segurança"></textarea>
+    <div class="field"><label for="bkin">Restaurar</label><textarea id="bkin" placeholder="Cole aqui a cópia de segurança"></textarea></div><button class="btn" data-act="restore">Restaurar dados</button></section>
+  <h2>Ajuda</h2>
+  <details><summary>Como funciona</summary><div><p>O SIAV continua sendo o sistema principal. Este aplicativo lê os relatórios exportados dele e mostra duas coisas: o que precisa de reposição e o que não está saindo.</p>
+    <ul><li><b>Repor:</b> o estoque chegou ou ficou abaixo do mínimo.</li><li><b>Baixa saída:</b> há estoque, mas nenhuma venda no período definido.</li><li><b>Classe A, B, C:</b> importância do produto no faturamento (curva ABC).</li></ul></div></details>
+  <details><summary>Como os avisos chegam</summary><div><p>Existem duas formas, ambas sem servidor e sem custo:</p><ul><li><b>Aviso na tela:</b> aparece quando o aplicativo está aberto e há produto novo em alerta.</li><li><b>Resumo no WhatsApp:</b> um toque no Painel monta a mensagem pronta para enviar.</li></ul>
+    <p>Esta versão não consulta o SIAV sozinha. Quem importa os relatórios atualiza os alertas. Para aviso automático a cada venda, é preciso confirmar com o fornecedor do SIAV se existe API ou exportação agendada.</p></div></details>
+  <details><summary>Compartilhar com a equipe</summary><div><p>Envie o link do aplicativo para os sócios e funcionários. Cada pessoa tem seus próprios dados no próprio celular, protegidos pelo PIN de cada um. Para ver os mesmos alertas, cada pessoa importa os mesmos relatórios, ou recebe o resumo no WhatsApp, ou restaura a cópia de segurança.</p><p>Dica: no celular, use "Adicionar à tela inicial" do navegador para abrir como um aplicativo.</p></div></details>
+  <details><summary>Se esquecer o PIN</summary><div><p>Não há como recuperar o PIN, porque os dados são criptografados. Na tela do PIN, escolha "Esqueci o PIN" para apagar tudo e começar de novo. Por isso, guarde uma cópia de segurança.</p></div></details>
+  <section class="card"><h3>Apagar tudo</h3><p class="small muted">Remove produtos, vendas e ajustes deste aparelho.</p><button class="btn danger" data-act="wipe">Apagar todos os dados</button></section>`;
+}
+
+/* ---------- render ---------- */
+function render(){
+  if(locked)return;
+  const A=analyze(),v=$('#view');
+  const y=window.scrollY;
+  v.innerHTML=({painel:vPainel,alertas:vAlertas,produtos:vProdutos,importar:()=>vImportar(),mais:()=>vMais()})[tab](A);
+  const n=A.list.filter(x=>x.active&&(x.status==='out'||x.status==='low')).length;
+  $('#tabs .in').innerHTML=Object.keys(tabNames).map(k=>`<button data-act="tab" data-tab="${k}" ${tab===k?'aria-current="page"':''}>${icons[k]}<span>${tabNames[k]}</span>${k==='alertas'&&n?`<span class="dot">${n}</span>`:''}</button>`).join('');
+  $('#lockBtn').hidden=!key;
+  window.scrollTo(0,y);
+}
+function setTab(t){tab=t;imp=tab==='importar'?imp:null;render();window.scrollTo(0,0)}
+
+/* ---------- ficha do produto ---------- */
+function openEdit(id){
+  const A=analyze(),x=id?A.list.find(a=>a.id===id):null,p=x?x.p:{name:'',code:'',stock:'',min:null,lead:null,cost:'',price:''};
+  const f=(i,l,v,t,h)=>`<div class="field"><label for="${i}">${l}</label><input id="${i}" type="${t||'text'}" ${t==='number'?'inputmode="decimal" step="any"':''} value="${esc(v==null?'':v)}">${h?`<small>${h}</small>`:''}</div>`;
+  $('#layer').innerHTML=`<div class="overlay" id="ov"><div class="sheet" role="dialog" aria-modal="true" aria-label="Ficha do produto">
+    <h2>${x?esc(p.name):'Novo produto'}</h2>
+    ${x?`<p class="small muted">Classe ${x.cls} · ${x.daily>0?'vende '+fmt(x.daily,1)+' por dia':'sem vendas no período'} · mínimo automático: ${fmt(x.auto,0)}</p>`:''}
+    ${x?'':f('e-name','Nome do produto',p.name)}
+    ${f('e-code','Código',p.code)}
+    ${f('e-stock','Quantidade em estoque',p.stock,'number')}
+    ${f('e-min','Estoque mínimo manual',p.min,'number','Deixe em branco para usar o cálculo automático')}
+    ${f('e-lead','Prazo de entrega deste produto (dias)',p.lead,'number','Em branco usa o padrão dos ajustes')}
+    <div class="grid2">${f('e-cost','Custo (R$)',p.cost||'','number')}${f('e-price','Preço de venda (R$)',p.price||'','number')}</div>
+    <p class="err" id="e-err"></p>
+    <div class="row"><button class="btn primary grow" data-act="saveedit" data-id="${esc(id||'')}">Salvar</button><button class="btn" data-act="closesheet">Cancelar</button></div>
+    ${x?`<button class="btn danger" data-act="deleteprod" data-id="${esc(id)}">Excluir produto</button>`:''}</div></div>`;
+}
+function saveEdit(id){
+  const v=i=>$('#'+i)?$('#'+i).value.trim():'',nv=i=>{const s=v(i);if(s==='')return null;const n=toNum(s);return isNaN(n)?null:n};
+  let p;
+  if(id)p=S.products[id];
+  else{const name=v('e-name');if(!name){$('#e-err').textContent='Digite o nome do produto.';return}
+    const nid=norm(name);if(S.products[nid]){$('#e-err').textContent='Já existe um produto com esse nome.';return}
+    p=S.products[nid]={id:nid,name,code:'',stock:null,min:null,lead:null,cost:0,price:0}}
+  wipeDemoIfNeeded();
+  p.code=v('e-code');p.stock=nv('e-stock');p.min=nv('e-min');p.lead=nv('e-lead');p.cost=nv('e-cost')||0;p.price=nv('e-price')||0;
+  save();$('#layer').innerHTML='';render();toast('Produto salvo');maybeNotify();
+}
+function wipeDemoIfNeeded(){}
+
+/* ---------- avisos na tela ---------- */
+function maybeNotify(){
+  if(!S.settings.notify||!('Notification' in window)||Notification.permission!=='granted'||locked)return;
+  try{
+    const td=today(),A=analyze(),fresh=A.list.filter(x=>x.active&&(x.status==='out'||x.status==='low')&&S.lastNotified[x.id]!==td);
+    if(!fresh.length)return;
+    fresh.forEach(x=>S.lastNotified[x.id]=td);save();
+    const names=fresh.slice(0,3).map(x=>x.p.name).join(', ')+(fresh.length>3?` e mais ${fresh.length-3}`:'');
+    new Notification(fresh.length===1?'1 produto precisa de reposição':fresh.length+' produtos precisam de reposição',{body:names});
+  }catch(e){}
+}
+setInterval(maybeNotify,30*60*1000);
+
+/* ---------- exemplo ---------- */
+function loadDemo(){
+  let seed=20261019;const rnd=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+  const items=[['Cerveja Lata 350ml (un.)',3.2,4.5,22,40],['Cerveja Long Neck 330ml (un.)',4.1,6.5,16,18],['Cerveja Garrafa 600ml (un.)',5.4,8.9,11,9],['Cerveja Artesanal IPA 500ml',12,19.9,2.2,10],['Cerveja Importada 330ml',7.5,12.9,3.5,6],
+    ['Água Tônica 350ml',2.6,4.9,6,30],['Refrigerante 2L',5.1,8.5,7,25],['Energético 269ml',4.4,8.0,5,12],['Gelo 5kg',6,10,4.5,3],['Carvão 3kg',11,18.9,1.4,8],
+    ['Vinho Tinto Suave 750ml',19,32.9,2.4,14],['Vinho Tinto Seco Chileno 750ml',29,49.9,1.9,5],['Vinho Branco 750ml',24,39.9,1.1,12],['Espumante Brut 750ml',32,54.9,1.3,9],['Vinho do Porto 750ml',58,99.9,0,6],
+    ['Cachaça Tradicional 965ml',9,16.9,2.8,20],['Cachaça Envelhecida 700ml',38,69.9,.5,5],['Vodka 1L',27,44.9,2.1,7],['Gin 750ml',64,99.9,.9,8],['Whisky 8 anos 1L',69,119.9,1.2,3],
+    ['Licor de Jenipapo 500ml',17,29.9,0,9],['Absinto 750ml',45,79.9,0,4],['Campari 900ml',39,64.9,.8,10],['Aperol 750ml',42,69.9,.7,6],['Amendoim Japonês 500g',8,14.9,1.2,18],
+    ['Copo Descartável 200ml (c/100)',6.5,11.9,1.6,15],['Saca-rolhas Simples',4,9.9,0,12],['Taça de Vidro',9,18.9,0,7]];
+  S=defaults();S.demo=true;S.stockAt=today();S.salesAt=today();const t=dayNum(today());
+  items.forEach((it,i)=>{
+    const id=norm(it[0]);let sold=0;
+    for(let d=1;d<=60;d++){if(it[3]>0){const q=Math.round(it[3]*(0.4+rnd()*1.2));if(q>0){const dd=addDays(today(),-d);S.sales.push({d:dd,n:id,c:'',q,v:+(q*it[2]).toFixed(2)});if(d<=3)sold+=q}}}
+    const low=[0,2,4,5,8,10,15].includes(i),zero=[9].includes(i);
+    const stock=zero?0:low?Math.max(1,Math.round(it[3]*(i%2?1.5:3.5))):it[4]>0?Math.round(it[3]*(8+rnd()*10)+it[4]):it[4];
+    S.products[id]={id,name:it[0],code:String(7890000+i*37),stock,min:null,lead:null,cost:it[1],price:it[2]};
+  });
+  S.settings.notify=false;save();tab='painel';render();toast('Dados de exemplo carregados');
+}
+
+/* ---------- porta do PIN ---------- */
+function gate(mode,cancel){
+  locked=mode==='unlock';
+  const setup=mode==='setup';
+  $('#layer').innerHTML=`<div class="gate" id="gate"><div class="box">
+    <h1>Caruzo Estoque</h1>
+    ${setup?`<p><b>Proteja os dados com um PIN.</b></p><p class="muted small">São 6 números que só você sabe. Os dados do estoque e das vendas ficam criptografados neste aparelho. Se esquecer o PIN, será preciso recomeçar.</p>`
+      :`<p><b>Digite seu PIN para entrar.</b></p>`}
+    <div class="field"><label for="pin1">${setup?'Novo PIN':'PIN'}</label><input id="pin1" class="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="${setup?'new-password':'current-password'}" placeholder="••••••"></div>
+    ${setup?`<div class="field"><label for="pin2">Repita o PIN</label><input id="pin2" class="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password" placeholder="••••••"></div>`:''}
+    <p class="err" id="perr" role="alert"></p>
+    <button class="btn primary block" id="pgo">${setup?'Criar PIN':'Entrar'}</button>
+    ${setup?`<button class="btn block" id="pskip">${cancel?'Cancelar':'Agora não'}</button>`:`<button class="btn block" id="pforgot">Esqueci o PIN</button>`}
+  </div></div>`;
+  const go=async()=>{
+    const p1=$('#pin1').value,err=$('#perr');
+    if(!/^\d{6}$/.test(p1)){err.textContent='O PIN tem exatamente 6 números.';return}
+    $('#pgo').disabled=true;
+    if(setup){
+      if($('#pin2').value!==p1){err.textContent='Os dois PINs não são iguais.';$('#pgo').disabled=false;return}
+      const salt=crypto.getRandomValues(new Uint8Array(16));saltB64=toB64(salt);key=await deriveKey(p1,salt);lsSet(K_SEEN,'1');save();
+      $('#layer').innerHTML='';locked=false;armLock();render();toast('PIN criado');
+    }else{
+      try{const o=JSON.parse(lsGet(K_ENC)),k=await deriveKey(p1,fromB64(o.s));
+        const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:fromB64(o.i)},k,fromB64(o.c));
+        S=merge(JSON.parse(dec.decode(pt)));key=k;saltB64=o.s;$('#layer').innerHTML='';locked=false;armLock();render();maybeNotify();
+      }catch(e){err.textContent='PIN incorreto.';$('#pgo').disabled=false;$('#pin1').value='';$('#pin1').focus()}
+    }
+  };
+  $('#pgo').onclick=go;$('#pin1').onkeydown=e=>{if(e.key==='Enter'&&!setup)go()};
+  if(setup)$('#pskip').onclick=()=>{lsSet(K_SEEN,'1');$('#layer').innerHTML='';locked=false;render()};
+  else $('#pforgot').onclick=()=>{
+    $('#perr').innerHTML='';
+    $('#pforgot').outerHTML=`<p class="err">Isso apaga todos os dados deste aparelho e não pode ser desfeito.</p><button class="btn danger block" id="pwipe">Apagar tudo e recomeçar</button>`;
+    $('#pwipe').onclick=()=>{lsDel(K_ENC);lsDel(K_PLAIN);S=defaults();key=null;saltB64=null;locked=false;$('#layer').innerHTML='';render();toast('Dados apagados')};
+  };
+  setTimeout(()=>{const e=$('#pin1');if(e)e.focus()},50);
+}
+function lockNow(){if(!key)return;S=defaults();const k=key;key=null;locked=true;clearTimeout(lockTimer);$('#view').innerHTML='';$('#tabs .in').innerHTML='';$('#lockBtn').hidden=true;gate('unlock')}
+function armLock(){clearTimeout(lockTimer);if(key)lockTimer=setTimeout(lockNow,5*60*1000)}
+['click','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,()=>{if(key&&!locked)armLock()},{passive:true}));
+
+/* ---------- eventos ---------- */
+document.addEventListener('click',async e=>{
+  const el=e.target.closest('[data-act]');if(!el)return;
+  const a=el.dataset.act,id=el.dataset.id;
+  switch(a){
+    case 'tab':setTab(el.dataset.tab);break;
+    case 'goalerts':alertFilter=el.dataset.f;setTab('alertas');break;
+    case 'af':alertFilter=el.dataset.f;render();break;
+    case 'pf':prodFilter=el.dataset.f;render();break;
+    case 'snooze':S.snooze[id]=addDays(today(),+el.dataset.days);save();render();toast('Ok. Avisaremos de novo se continuar em alerta.');break;
+    case 'edit':openEdit(id);break;
+    case 'closesheet':$('#layer').innerHTML='';break;
+    case 'saveedit':saveEdit(id);break;
+    case 'deleteprod':
+      if(el.dataset.sure){delete S.products[id];delete S.snooze[id];save();$('#layer').innerHTML='';render();toast('Produto excluído')}
+      else{el.dataset.sure='1';el.textContent='Toque de novo para confirmar a exclusão'}break;
+    case 'demo':loadDemo();break;
+    case 'cleardemo':S=merge({settings:S.settings});save();render();break;
+    case 'copysum':{const t=summaryText(analyze());try{await navigator.clipboard.writeText(t);toast('Resumo copiado')}catch(err){toast('Não foi possível copiar. Use o botão do WhatsApp.')}break}
+    case 'notifon':
+      try{const r=await Notification.requestPermission();if(r==='granted'){S.settings.notify=true;save();toast('Avisos ativados');maybeNotify()}else toast('O navegador não permitiu os avisos.')}catch(err){toast('Este navegador não permite avisos.')}
+      render();break;
+    case 'notifoff':S.settings.notify=false;save();render();break;
+    case 'doimport':applyImport();break;
+    case 'cancelimport':imp=null;render();break;
+    case 'lock':lockNow();break;
+    case 'setpin':gate('setup',true);break;
+    case 'rmpin':key=null;saltB64=null;lsDel(K_ENC);save();clearTimeout(lockTimer);render();toast('PIN removido');break;
+    case 'backup':{
+      const o=JSON.stringify(S),ta=$('#bk');ta.hidden=false;ta.value=o;ta.select();
+      try{await navigator.clipboard.writeText(o);toast('Cópia de segurança copiada')}catch(err){toast('Selecione o texto e copie manualmente.')}break}
+    case 'restore':{
+      try{const o=JSON.parse($('#bkin').value);if(!o||typeof o.products!=='object'||!Array.isArray(o.sales))throw 0;S=merge(o);save();tab='painel';render();toast('Dados restaurados')}
+      catch(err){toast('Esse texto não é uma cópia de segurança válida.')}break}
+    case 'wipe':
+      if(el.dataset.sure){S=defaults();lsDel(K_PLAIN);lsDel(K_ENC);key=null;saltB64=null;clearTimeout(lockTimer);tab='painel';render();toast('Todos os dados foram apagados')}
+      else{el.dataset.sure='1';el.textContent='Toque de novo para confirmar';}break;
+  }
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.type==='file'&&t.files&&t.files[0]){readFile(t.files[0],t.dataset.kind);t.value='';return}
+  if(t.dataset.map&&imp){imp.map[t.dataset.map]=+t.value;render();return}
+  if(t.dataset.set){const k=t.dataset.set;S.settings[k]=k==='wa'?t.value.trim():(isNaN(+t.value)||t.value===''?S.settings[k]:+t.value);save();toast('Salvo')}
+});
+document.addEventListener('input',e=>{
+  if(e.target.id==='psearch'){prodSearch=e.target.value;const pos=e.target.selectionStart;render();const n=$('#psearch');if(n){n.focus();n.setSelectionRange(pos,pos)}}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#ov'))$('#layer').innerHTML=''});
+
+/* ---------- início ---------- */
+(function boot(){
+  if(lsGet(K_ENC)&&cryptoOk){locked=true;gate('unlock');return}
+  const p=lsGet(K_PLAIN);
+  if(p){try{S=merge(JSON.parse(p))}catch(e){}}
+  else if(!lsGet(K_SEEN)&&cryptoOk){render();gate('setup');return}
+  render();maybeNotify();
+})();
+window.__caruzo={analyze,toNum,toDate,parseCSV,get S(){return S},loadDemo};
+})();
+</script>
